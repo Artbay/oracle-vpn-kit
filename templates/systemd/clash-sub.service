@@ -1,0 +1,17 @@
+[Unit]
+Description=Clash subscription file server (static, plain HTTP)
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+WorkingDirectory=/var/www/sub
+ExecStart=/usr/bin/python3 -m http.server ${SUB_PORT} --bind 0.0.0.0 --directory /var/www/sub
+Restart=always
+RestartSec=2
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
