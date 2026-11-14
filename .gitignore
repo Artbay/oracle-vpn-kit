@@ -17,3 +17,6 @@ subscription*.yaml
 !templates/clash-mihomo.yaml.tmpl
 __pycache__/
 *.bak*
+
+# 可选 Docker 方案渲染出的配置与证书
+docker/conf/
