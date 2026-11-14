@@ -1,0 +1,15 @@
+{
+  "server": "[::]:${TUIC_PORT}",
+  "users": {
+    "${TUIC_UUID}": "${TUIC_PASSWORD}"
+  },
+  "certificate": "/etc/tuic/server.crt",
+  "private_key": "/etc/tuic/server.key",
+  "congestion_control": "bbr",
+  "alpn": ["h3"],
+  "zero_rtt_handshake": true,
+  "dual_stack": true,
+  "auth_timeout": "3s",
+  "max_idle_time": "15s",
+  "log_level": "info"
+}

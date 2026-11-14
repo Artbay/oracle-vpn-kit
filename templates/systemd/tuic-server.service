@@ -1,0 +1,16 @@
+[Unit]
+Description=TUIC v5 server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tuic
+Group=tuic
+ExecStart=/usr/local/bin/tuic-server -c /etc/tuic/config.json
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
