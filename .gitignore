@@ -1,0 +1,19 @@
+# 机密与生成物：一律不入库
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.json.cred
+cloudflared-*.json
+out/
+output/
+*_link.txt
+links.txt
+*.png
+qr/
+subscription*.yaml
+!templates/clash-mihomo.yaml.tmpl
+__pycache__/
+*.bak*
