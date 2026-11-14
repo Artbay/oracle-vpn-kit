@@ -1,0 +1,7 @@
+# 本地管理的命名隧道；凭据文件由 `cloudflared tunnel create` 生成，权限 600，切勿入库
+tunnel: ${CF_TUNNEL_ID}
+credentials-file: /etc/cloudflared/${CF_TUNNEL_ID}.json
+ingress:
+  - hostname: ${CDN_DOMAIN}
+    service: http://127.0.0.1:${WS_LOCAL_PORT}
+  - service: http_status:404
