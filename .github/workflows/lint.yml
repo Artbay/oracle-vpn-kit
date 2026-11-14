@@ -1,0 +1,50 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash -n
+        run: |
+          for f in scripts/*.sh tools/*.sh docker/*.sh; do bash -n "$f"; done
+
+      - name: shellcheck
+        run: shellcheck scripts/*.sh tools/*.sh docker/*.sh
+
+      - name: python compile
+        run: python3 -m py_compile tools/*.py
+
+      - name: 自测（假凭据生成订阅）
+        run: bash tools/selftest.sh
+
+      - name: deploy.sh --plan 只读检查
+        run: |
+          bash scripts/deploy.sh --help >/dev/null
+          rc=0
+          bash scripts/deploy.sh --plan --set VPS_IP=192.0.2.10 --set REALITY_SNI=www.example.com --set HY2_SNI=www.example.org || rc=$?
+          # 0 = 预检通过，2 = 预检有 FAIL（CI 不是 root 等）；两者都必须不修改任何东西
+          [ "$rc" = 0 ] || [ "$rc" = 2 ] || exit 1
+          bash scripts/deploy.sh --plan --skip cdn,tuic >/dev/null || [ $? = 2 ]
+          test ! -e .env && test ! -e out && test ! -e /var/log/oracle-vpn-kit
+          test -z "$(git status --porcelain)"
+          echo ok
+
+      - name: 脱敏扫描
+        run: python3 tools/scan_repo.py .
+
+      - name: 占位符检查（.env.example 不得出现真实值）
+        run: |
+          # 需要用户填写的项必须仍是 <占位符> 或空
+          bad=$(grep -E '^(VPS_IP|VPS_IFACE|REALITY_SNI|HY2_SNI|CF_TUNNEL_NAME)=' .env.example | grep -vE '=<[A-Z_0-9]+>' || true)
+          secrets=$(grep -E '^(VLESS_UUID|REALITY_PRIVATE_KEY|REALITY_PUBLIC_KEY|HY2_PASSWORD|HY2_OBFS_PASSWORD|TUIC_UUID|TUIC_PASSWORD|SUB_TOKEN)=[^[:space:]#]' .env.example || true)
+          if [ -n "$bad$secrets" ]; then echo "$bad"; echo "$secrets"; exit 1; fi
+          echo ok
