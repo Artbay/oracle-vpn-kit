@@ -3,9 +3,11 @@
 # 前提：域名已托管在 Cloudflare；Xray 已有 WS 入站（install_xray.sh）。
 # 交互步骤：`cloudflared tunnel login` 会打印授权链接，需你本人在浏览器里打开并选择域名。
 # 凭据（cert.pem、<隧道ID>.json）只留在服务器，权限 600，绝不入库或外发。
+# shellcheck source=scripts/lib.sh
 . "$(dirname "$0")/lib.sh"
 need_root; load_env
-require CF_TUNNEL_NAME CDN_DOMAIN WS_LOCAL_PORT
+require CF_TUNNEL_NAME CDN_DOMAIN
+require_port WS_LOCAL_PORT
 
 if ! command -v cloudflared >/dev/null; then
   log "从 Cloudflare 官方 apt 源安装 cloudflared"
@@ -21,8 +23,10 @@ CF_HOME="${SUDO_USER:+$(getent passwd "$SUDO_USER" | cut -d: -f6)}"; CF_HOME="${
 if [ ! -f "$CF_HOME/.cloudflared/cert.pem" ]; then
   log "需要授权：下面会输出一个链接，请你本人在浏览器打开并选择你的域名"
   cloudflared tunnel login
-  [ -f /root/.cloudflared/cert.pem ] && [ "$CF_HOME" != /root ] && \
-    { mkdir -p "$CF_HOME/.cloudflared"; mv /root/.cloudflared/cert.pem "$CF_HOME/.cloudflared/"; }
+  if [ -f /root/.cloudflared/cert.pem ] && [ "$CF_HOME" != /root ]; then
+    mkdir -p "$CF_HOME/.cloudflared"; mv /root/.cloudflared/cert.pem "$CF_HOME/.cloudflared/"
+  fi
+  [ -f "$CF_HOME/.cloudflared/cert.pem" ] || die "授权未完成：没有找到 cert.pem"
 fi
 chmod 600 "$CF_HOME/.cloudflared/cert.pem"
 export TUNNEL_ORIGIN_CERT="$CF_HOME/.cloudflared/cert.pem"
@@ -41,7 +45,8 @@ fi
 export CF_TUNNEL_ID
 mkdir -p /etc/cloudflared
 if [ ! -f "/etc/cloudflared/$CF_TUNNEL_ID.json" ]; then
-  cp "$CF_HOME/.cloudflared/$CF_TUNNEL_ID.json" "/etc/cloudflared/$CF_TUNNEL_ID.json"
+  [ -f "$CF_HOME/.cloudflared/$CF_TUNNEL_ID.json" ] || die "找不到隧道凭据 $CF_HOME/.cloudflared/<隧道ID>.json（隧道可能是在别的机器上创建的，请把凭据文件拷到这里）"
+  install -m 600 "$CF_HOME/.cloudflared/$CF_TUNNEL_ID.json" "/etc/cloudflared/$CF_TUNNEL_ID.json"
 fi
 chmod 600 "/etc/cloudflared/$CF_TUNNEL_ID.json"
 render "$KIT_DIR/templates/cloudflared-config.yml.tmpl" /etc/cloudflared/config.yml 600 root:root \
@@ -51,8 +56,11 @@ cloudflared tunnel ingress validate --config /etc/cloudflared/config.yml
 # 只新增/指向这一条 proxied CNAME，不改动 zone 内其它任何记录与设置
 cloudflared tunnel route dns "$CF_TUNNEL_NAME" "$CDN_DOMAIN" || warn "DNS 记录可能已存在，请在 Cloudflare 面板确认 $CDN_DOMAIN 为 proxied CNAME 指向隧道"
 
-backup /etc/systemd/system/cloudflared.service
-install -m 644 "$KIT_DIR/templates/systemd/cloudflared.service" /etc/systemd/system/cloudflared.service
+UNIT=/etc/systemd/system/cloudflared.service
+if ! cmp -s "$KIT_DIR/templates/systemd/cloudflared.service" "$UNIT"; then
+  backup "$UNIT"
+  install -m 644 "$KIT_DIR/templates/systemd/cloudflared.service" "$UNIT"
+fi
 systemctl daemon-reload
 systemctl enable cloudflared >/dev/null 2>&1
 systemctl restart cloudflared
