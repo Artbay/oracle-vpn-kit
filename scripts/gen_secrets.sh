@@ -2,6 +2,8 @@
 # 生成全部随机凭据，追加到 .env（只填空着的变量，已有值不覆盖）。
 # 本地或服务器均可运行；需要 openssl，Reality 密钥需要 xray（未安装时提示稍后补）。
 # 输出不回显任何秘密值。
+# 可选参数 KEY=VALUE：填写主人决定的非随机项（VPS_IP、REALITY_SNI、HY2_SNI、CF_TUNNEL_NAME、CDN_DOMAIN 等），
+# 同样只填空值/占位符，不覆盖已有值。例：bash scripts/gen_secrets.sh VPS_IP=203.0.113.10 HY2_SNI=www.example.com
 set -euo pipefail
 KIT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$KIT_DIR/.env}"
@@ -27,6 +29,19 @@ setvar() {  # 仅当变量为空或占位符时写入
   echo "[+] 已生成 $k"
 }
 
+for kv in "$@"; do
+  case "$kv" in
+    VPS_IP=*|VPS_IFACE=*|NODE_PREFIX=*|REALITY_SNI=*|HY2_SNI=*|CF_TUNNEL_NAME=*|CDN_DOMAIN=*|CF_PREFERRED_IPS=*)
+      [[ "${kv#*=}" =~ ^[A-Za-z0-9.,:_-]+$ ]] || { echo "[x] ${kv%%=*} 的值含不允许的字符" >&2; exit 1; }
+      setvar "${kv%%=*}" "${kv#*=}";;
+    *) echo "[x] 不支持的参数：${kv%%=*}" >&2; exit 1;;
+  esac
+done
+# 公网网卡：仍是占位符时，按本机默认路由自动识别（只读本机路由表，不联网）
+if command -v ip >/dev/null; then
+  dev="$(ip -o route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="dev"){print $(i+1); exit}}')" || true
+  [ -n "${dev:-}" ] && setvar VPS_IFACE "$dev"
+fi
 setvar VLESS_UUID "$(uuid)"
 setvar REALITY_SHORT_ID "$(hex 8)"
 setvar XHTTP_SHORT_ID "$(hex 8)"
