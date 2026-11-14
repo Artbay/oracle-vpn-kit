@@ -1,0 +1,3 @@
+# 让 shellcheck 跟随 scripts/lib.sh
+external-sources=true
+source-path=SCRIPTDIR
